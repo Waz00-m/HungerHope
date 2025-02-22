@@ -1,92 +1,341 @@
-from flask import Flask,request, render_template
-import numpy as np
-import pandas as pd
-import pickle
-import ast
+from flask import Flask, render_template, request, redirect, url_for, flash
+from flask_mysqldb import MySQL
+from flask_mysqldb import MySQLdb
+from werkzeug.security import generate_password_hash, check_password_hash
+import os
 
-#load the database
-symptoms = pd.read_csv('E:\Medicine Recommendation System\datasets\symptoms_df.csv')
-precautions = pd.read_csv('E:\Medicine Recommendation System\datasets\precautions_df.csv')
-workout = pd.read_csv('E:\Medicine Recommendation System\datasets\workout_df.csv')
-description = pd.read_csv('E:\Medicine Recommendation System\datasets\description.csv')
-medications = pd.read_csv('E:\Medicine Recommendation System\datasets\medications.csv')
-diets = pd.read_csv('E:\Medicine Recommendation System\datasets\diets.csv')
+app = Flask(__name__, template_folder="templates")
+# app = Flask(__name__)
+app.secret_key = "\xbb\xed\x84v\x0e\x1f\xb2\xc3\x92,0\xcak\x94\x02\xfd\x05\xac\xac\x15\x13~-z"  # Replace with a unique, secure key
 
-#load the model
-svc = pickle.load(open('E:\Medicine Recommendation System\model\svc.pkl', 'rb'))
+# MySQL configurations
+app.config["MYSQL_HOST"] = "localhost"
+app.config["MYSQL_USER"] = "root"
+app.config["MYSQL_PASSWORD"] = "9688656667"
+app.config["MYSQL_DB"] = "see"
 
-app = Flask(__name__)
-
-def helper(dis):
-    desc = description[description['Disease']==dis]['Description']
-    desc = " ".join([w for w in desc])
-
-    pre = precautions[precautions['Disease']==dis][['Precaution_1', 'Precaution_2', 'Precaution_3', 'Precaution_4']]
-    pre = [col for col in pre.values]
-
-    med = medications[medications['Disease']== dis]['Medication']
-    med = [med for med in med.values]
-
-    die = diets[diets['Disease'] == dis]['Diet']
-    die = [die for die in die.values]
-
-    workt = workout[workout['disease']== dis]['workout']
-
-    med = ast.literal_eval(med[0])
-    die = ast.literal_eval(die[0])
-
-    return desc, pre, med, die, workt
-
-symptoms_dict = {'itching': 0, 'skin_rash': 1, 'nodal_skin_eruptions': 2, 'continuous_sneezing': 3, 'shivering': 4, 'chills': 5, 'joint_pain': 6, 'stomach_pain': 7, 'acidity': 8, 'ulcers_on_tongue': 9, 'muscle_wasting': 10, 'vomiting': 11, 'burning_micturition': 12, 'spotting_ urination': 13, 'fatigue': 14, 'weight_gain': 15, 'anxiety': 16, 'cold_hands_and_feets': 17, 'mood_swings': 18, 'weight_loss': 19, 'restlessness': 20, 'lethargy': 21, 'patches_in_throat': 22, 'irregular_sugar_level': 23, 'cough': 24, 'high_fever': 25, 'sunken_eyes': 26, 'breathlessness': 27, 'sweating': 28, 'dehydration': 29, 'indigestion': 30, 'headache': 31, 'yellowish_skin': 32, 'dark_urine': 33, 'nausea': 34, 'loss_of_appetite': 35, 'pain_behind_the_eyes': 36, 'back_pain': 37, 'constipation': 38, 'abdominal_pain': 39, 'diarrhoea': 40, 'mild_fever': 41, 'yellow_urine': 42, 'yellowing_of_eyes': 43, 'acute_liver_failure': 44, 'fluid_overload': 45, 'swelling_of_stomach': 46, 'swelled_lymph_nodes': 47, 'malaise': 48, 'blurred_and_distorted_vision': 49, 'phlegm': 50, 'throat_irritation': 51, 'redness_of_eyes': 52, 'sinus_pressure': 53, 'runny_nose': 54, 'congestion': 55, 'chest_pain': 56, 'weakness_in_limbs': 57, 'fast_heart_rate': 58, 'pain_during_bowel_movements': 59, 'pain_in_anal_region': 60, 'bloody_stool': 61, 'irritation_in_anus': 62, 'neck_pain': 63, 'dizziness': 64, 'cramps': 65, 'bruising': 66, 'obesity': 67, 'swollen_legs': 68, 'swollen_blood_vessels': 69, 'puffy_face_and_eyes': 70, 'enlarged_thyroid': 71, 'brittle_nails': 72, 'swollen_extremeties': 73, 'excessive_hunger': 74, 'extra_marital_contacts': 75, 'drying_and_tingling_lips': 76, 'slurred_speech': 77, 'knee_pain': 78, 'hip_joint_pain': 79, 'muscle_weakness': 80, 'stiff_neck': 81, 'swelling_joints': 82, 'movement_stiffness': 83, 'spinning_movements': 84, 'loss_of_balance': 85, 'unsteadiness': 86, 'weakness_of_one_body_side': 87, 'loss_of_smell': 88, 'bladder_discomfort': 89, 'foul_smell_of urine': 90, 'continuous_feel_of_urine': 91, 'passage_of_gases': 92, 'internal_itching': 93, 'toxic_look_(typhos)': 94, 'depression': 95, 'irritability': 96, 'muscle_pain': 97, 'altered_sensorium': 98, 'red_spots_over_body': 99, 'belly_pain': 100, 'abnormal_menstruation': 101, 'dischromic _patches': 102, 'watering_from_eyes': 103, 'increased_appetite': 104, 'polyuria': 105, 'family_history': 106, 'mucoid_sputum': 107, 'rusty_sputum': 108, 'lack_of_concentration': 109, 'visual_disturbances': 110, 'receiving_blood_transfusion': 111, 'receiving_unsterile_injections': 112, 'coma': 113, 'stomach_bleeding': 114, 'distention_of_abdomen': 115, 'history_of_alcohol_consumption': 116, 'fluid_overload.1': 117, 'blood_in_sputum': 118, 'prominent_veins_on_calf': 119, 'palpitations': 120, 'painful_walking': 121, 'pus_filled_pimples': 122, 'blackheads': 123, 'scurring': 124, 'skin_peeling': 125, 'silver_like_dusting': 126, 'small_dents_in_nails': 127, 'inflammatory_nails': 128, 'blister': 129, 'red_sore_around_nose': 130, 'yellow_crust_ooze': 131}
-diseases_list = {15: 'Fungal infection', 4: 'Allergy', 16: 'GERD', 9: 'Chronic cholestasis', 14: 'Drug Reaction', 33: 'Peptic ulcer diseae', 1: 'AIDS', 12: 'Diabetes ', 17: 'Gastroenteritis', 6: 'Bronchial Asthma', 23: 'Hypertension ', 30: 'Migraine', 7: 'Cervical spondylosis', 32: 'Paralysis (brain hemorrhage)', 28: 'Jaundice', 29: 'Malaria', 8: 'Chicken pox', 11: 'Dengue', 37: 'Typhoid', 40: 'hepatitis A', 19: 'Hepatitis B', 20: 'Hepatitis C', 21: 'Hepatitis D', 22: 'Hepatitis E', 3: 'Alcoholic hepatitis', 36: 'Tuberculosis', 10: 'Common Cold', 34: 'Pneumonia', 13: 'Dimorphic hemmorhoids(piles)', 18: 'Heart attack', 39: 'Varicose veins', 26: 'Hypothyroidism', 24: 'Hyperthyroidism', 25: 'Hypoglycemia', 31: 'Osteoarthristis', 5: 'Arthritis', 0: '(vertigo) Paroymsal  Positional Vertigo', 2: 'Acne', 38: 'Urinary tract infection', 35: 'Psoriasis', 27: 'Impetigo'}
-
-def get_prediction(patient_symptoms):
-    input_vector = np.zeros(len(symptoms_dict))
-
-    for item in patient_symptoms:
-        input_vector[symptoms_dict[item]]= 1
-    return diseases_list[svc.predict([input_vector])[0]]
+mysql = MySQL(app)
 
 
-#routes
-@app.route('/')
+# routes
+@app.route("/")
 def index():
-    return render_template('index.html')
-
-@app.route('/predict', methods=['GET', 'POST'])
-def home():
-    if request.method == 'POST':
-        symptoms = request.form.get('symptoms')
-
-        
-        user_symptoms = [s.strip() for s in symptoms.split(',')]
-        user_symptoms = [sym.strip("[]' ") for sym in user_symptoms]
-        predicted_disease = get_prediction(user_symptoms)
-
-        desc, pre, med, die, workt = helper(predicted_disease)
-
-        return render_template('index.html', predicted_disease=predicted_disease, desc = desc, pre=pre, med= med, workt= workt, die=die)
-    return('index.html')
-       
-        
-
-@app.route('/about')
-def about():
-    return render_template('about.html')
-
-@app.route('/contact')
-def contact():
-    return render_template('contact.html')
-
-@app.route('/dev')
-def dev():
-    return render_template('dev.html')
-
-@app.route('/blog')
-def blog():
-    return render_template('blog.html')
+    return render_template("Homepage3.html")
 
 
-#main
-if __name__ == '__main__':
+@app.route("/home")
+def homepage():
+    return render_template("home.html")
+
+
+@app.route("/admin_home")
+def admin_homepage():
+    return render_template("admin_home.html")
+
+
+@app.route("/sign_up_page")
+def sign_up_page():
+    return render_template("Signup.html")
+
+
+@app.route("/admin/users")
+def admin_users():
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute(
+        "SELECT id, name, age, ph_no, email FROM sign_up WHERE email != 'admin@gmail.com'"
+    )
+    users = cursor.fetchall()
+    cursor.close()
+    return render_template("admin_users.html", users=users)
+
+
+@app.route("/remove_user/<int:user_id>", methods=["POST"])
+def remove_user(user_id):
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute("DELETE FROM sign_up WHERE id = %s", (user_id,))
+    mysql.connection.commit()
+    cursor.close()
+    return redirect(url_for("admin_users"))
+
+
+@app.route("/sign_up", methods=["POST"])
+def sign_up():
+    name = request.form["name"]
+    age = request.form["age"]
+    ph_no = request.form["ph_no"]
+    email = request.form["email"]
+    password = generate_password_hash(request.form["password"])
+
+    cursor = mysql.connection.cursor()
+    cursor.execute(
+        "INSERT INTO sign_up (name, age, ph_no, email, password) VALUES (%s, %s, %s, %s, %s)",
+        (name, age, ph_no, email, password),
+    )
+    mysql.connection.commit()
+    cursor.close()
+
+    return redirect(url_for("sign_in"))
+
+
+@app.route("/sign_in", methods=["GET", "POST"])
+def sign_in():
+    if request.method == "POST":
+        email = request.form["email"]
+        password = request.form["password"]
+
+        cursor = mysql.connection.cursor()
+        cursor.execute("SELECT * FROM sign_up WHERE email = %s", (email,))
+        user = cursor.fetchone()
+        cursor.close()
+        if user and check_password_hash(user[5], password):
+            if email == "admin@gmail.com":
+                return render_template("admin_home.html")
+            else:
+                return render_template("home.html")
+        else:
+            flash("Invalid email or password", "danger")
+    return render_template("Login2.html")
+
+
+@app.route("/forgot_password", methods=["GET", "POST"])
+def forgot_password():
+    if request.method == "POST":
+        email = request.form["email"]
+        old_password = request.form["old_password"]
+        new_password = request.form["new_password"]
+
+        cursor = mysql.connection.cursor()
+        cursor.execute("SELECT password FROM sign_up WHERE email = %s", (email,))
+        user = cursor.fetchone()
+
+        if user and check_password_hash(user[0], old_password):
+            # If old password is correct, update with the new password
+            hashed_password = generate_password_hash(new_password)
+            cursor.execute(
+                "UPDATE sign_up SET password = %s WHERE email = %s",
+                (hashed_password, email),
+            )
+            mysql.connection.commit()
+            flash("Password updated successfully", "success")
+            cursor.close()
+            return redirect(url_for("sign_in"))
+        else:
+            flash("Invalid email or old password", "danger")
+            cursor.close()
+
+    return render_template("ForgotPassword.html")
+
+
+@app.route("/donate", methods=["GET", "POST"])
+def donate():
+    if request.method == "POST":
+        # Get data from the form
+        name = request.form["name"]
+        ph_no = request.form["ph_no"]
+        address = request.form["address"]
+        email = request.form["email"]
+        food_name = request.form["food_name"]
+        food_quantity = request.form["food_quantity"]
+        expiry = request.form["expiry"]
+        description = request.form.get("description", "")
+
+        # File upload logic
+        food_image = request.files["food_image"]
+        image_filename = None
+        if food_image:
+            image_filename = food_image.filename
+            save_path = os.path.join("static/uploads", image_filename)
+            food_image.save(save_path)
+
+        # Insert data into the database with default status "NOT EXPIRED"
+        cursor = mysql.connection.cursor()
+        cursor.execute(
+            """
+            INSERT INTO surplus_food (name, ph_no, address, email, food_name, food_quantity, expiry, description, food_image, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'NOT EXPIRED')
+            """,
+            (
+                name,
+                ph_no,
+                address,
+                email,
+                food_name,
+                food_quantity,
+                expiry,
+                description,
+                image_filename,
+            ),
+        )
+        mysql.connection.commit()
+        cursor.close()
+
+        flash("Food donation posted successfully!", "success")
+        return redirect(url_for("homepage"))
+
+    return render_template("Donate_form.html")
+
+
+@app.route("/admin_donate", methods=["GET", "POST"])
+def admin_donate():
+    if request.method == "POST":
+        # Get data from the form
+        name = request.form["name"]
+        ph_no = request.form["ph_no"]
+        address = request.form["address"]
+        email = request.form["email"]
+        food_name = request.form["food_name"]
+        food_quantity = request.form["food_quantity"]
+        expiry = request.form["expiry"]
+        description = request.form.get("description", "")
+
+        # File upload logic
+        food_image = request.files["food_image"]
+        image_filename = None
+        if food_image:
+            image_filename = food_image.filename
+            save_path = os.path.join("static/uploads", image_filename)
+            food_image.save(save_path)
+
+        # Insert data into the database with default status "NOT EXPIRED"
+        cursor = mysql.connection.cursor()
+        cursor.execute(
+            """
+            INSERT INTO surplus_food (name, ph_no, address, email, food_name, food_quantity, expiry, description, food_image, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'NOT EXPIRED')
+            """,
+            (
+                name,
+                ph_no,
+                address,
+                email,
+                food_name,
+                food_quantity,
+                expiry,
+                description,
+                image_filename,
+            ),
+        )
+        mysql.connection.commit()
+        cursor.close()
+
+        flash("Food donation posted successfully!", "success")
+        return redirect(url_for("admin_homepage"))
+
+    return render_template("admin_d_form.html")
+
+
+from flask import render_template, request, redirect, url_for, flash
+from datetime import datetime
+
+
+@app.route("/donations")
+def donations():
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
+    # Update statuses for expired food items
+    cursor.execute(
+        """
+        UPDATE surplus_food 
+        SET status = 'EXPIRED' 
+        WHERE expiry < NOW() AND status = 'NOT EXPIRED'
+        """
+    )
+    mysql.connection.commit()
+
+    # Fetch all food items
+    cursor.execute("SELECT * FROM surplus_food WHERE status = 'NOT EXPIRED' ")
+    donations = cursor.fetchall()
+    cursor.close()
+
+    return render_template("donations.html", donations=donations)
+
+
+@app.route("/admin_donations")
+def admin_donations():
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
+    # Update statuses for expired food items
+    cursor.execute(
+        """
+        UPDATE surplus_food 
+        SET status = 'EXPIRED' 
+        WHERE expiry < NOW() AND status = 'NOT EXPIRED'
+        """
+    )
+    mysql.connection.commit()
+
+    # Fetch all food items
+    cursor.execute("SELECT * FROM surplus_food WHERE status = 'NOT EXPIRED' ")
+    donations = cursor.fetchall()
+    cursor.close()
+
+    return render_template("admin_donations.html", donations=donations)
+
+
+@app.route("/remove/<int:donation_id>", methods=["POST"])
+def remove_donation(donation_id):
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
+    # Remove the selected donation by ID
+    cursor.execute("DELETE FROM surplus_food WHERE id = %s", (donation_id,))
+    mysql.connection.commit()
+    cursor.close()
+
+    # Redirect back to the donations page
+    return redirect(url_for("admin_donations"))
+
+
+@app.route("/remove2/<int:donation_id>", methods=["POST"])
+def remove_donation2(donation_id):
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
+    # Remove the selected donation by ID
+    cursor.execute("DELETE FROM surplus_food WHERE id = %s", (donation_id,))
+    mysql.connection.commit()
+    cursor.close()
+
+    # Redirect back to the donations page
+    return redirect(url_for("admin_agri_manure"))
+
+
+@app.route("/agri_manure")
+def agri_manure():
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
+    # Fetch all food items
+    cursor.execute("SELECT * FROM surplus_food WHERE status = 'EXPIRED' ")
+    donations = cursor.fetchall()
+    cursor.close()
+
+    return render_template("donations2.html", donations=donations)
+
+
+@app.route("/admin_agri_manure")
+def admin_agri_manure():
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+
+    # Fetch all food items
+    cursor.execute("SELECT * FROM surplus_food WHERE status = 'EXPIRED' ")
+    donations = cursor.fetchall()
+    cursor.close()
+
+    return render_template("admin_donations2.html", donations=donations)
+
+
+@app.route("/Donate_form")
+def Donate_form():
+    return render_template("Donate_form.html")
+
+
+@app.route("/admin_Donate_form")
+def admin_Donate_form():
+    return render_template("admin_d_form.html")
+
+
+@app.route("/admin")
+def admin():
+    return render_template("Admin_Home.html")
+
+
+if __name__ == "__main__":
     app.run(debug=True)
